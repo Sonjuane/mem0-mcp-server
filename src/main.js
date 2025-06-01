@@ -1,5 +1,6 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import dotenv from 'dotenv';
 import { createStorageProvider } from './storage/index.js';
@@ -238,15 +239,17 @@ class Mem0MCPServer {
             await this.server.connect(transport);
             logger.info('Mem0 MCP Server running with stdio transport');
         } else if (config.transport === 'sse') {
-            // SSE transport implementation would go here
-            // For now, we'll focus on stdio transport
-            throw new Error('SSE transport not yet implemented. Please use TRANSPORT=stdio or enable HTTP server');
+            // SSE transport requires HTTP server to be enabled
+            if (!config.httpServerEnabled) {
+                throw new Error('SSE transport requires HTTP_SERVER_ENABLED=true');
+            }
+            logger.info('SSE transport will be handled by Express server');
         }
 
         // Start HTTP server if enabled
         if (config.httpServerEnabled) {
             try {
-                this.expressServer = await startExpressServer(this.memoryService);
+                this.expressServer = await startExpressServer(this.memoryService, this);
                 logger.info('HTTP server started successfully');
             } catch (error) {
                 logger.error('Failed to start HTTP server:', error);

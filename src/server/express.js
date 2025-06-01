@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { MemoryController } from './controllers/memoryController.js';
 import { createMemoryRoutes, createPublicRoutes } from './routes/memory.js';
 import {
@@ -17,10 +18,12 @@ import { logger } from '../utils/logger.js';
  * Provides HTTP API access to memory operations
  */
 export class ExpressServer {
-    constructor(memoryService) {
+    constructor(memoryService, mcpServer = null) {
         this.memoryService = memoryService;
+        this.mcpServer = mcpServer;
         this.app = express();
         this.server = null;
+        this.sseTransports = new Map(); // Track SSE transport sessions
         this.setupMiddleware();
         this.setupRoutes();
         this.setupErrorHandling();
@@ -118,9 +121,22 @@ export class ExpressServer {
 
         this.app.use('/api/', limiter);
 
-        // Body parsing middleware
-        this.app.use(express.json({ limit: '10mb' }));
-        this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+        // Body parsing middleware - exclude /message endpoint for SSE transport
+        this.app.use((req, res, next) => {
+            if (req.path === '/message') {
+                // Skip body parsing for SSE message endpoint
+                return next();
+            }
+            express.json({ limit: '10mb' })(req, res, next);
+        });
+
+        this.app.use((req, res, next) => {
+            if (req.path === '/message') {
+                // Skip body parsing for SSE message endpoint
+                return next();
+            }
+            express.urlencoded({ extended: true, limit: '10mb' })(req, res, next);
+        });
     }
 
     /**
@@ -128,6 +144,11 @@ export class ExpressServer {
      */
     setupRoutes() {
         const memoryController = new MemoryController(this.memoryService);
+
+        // SSE MCP transport endpoints (if MCP server is provided)
+        if (this.mcpServer && process.env.TRANSPORT === 'sse') {
+            this.setupSSERoutes();
+        }
 
         // Public routes (no authentication required)
         this.app.use('/api', createPublicRoutes(memoryController));
@@ -137,22 +158,31 @@ export class ExpressServer {
 
         // Root endpoint
         this.app.get('/', (req, res) => {
+            const endpoints = {
+                health: 'GET /api/health',
+                info: 'GET /api/info',
+                saveMemory: 'POST /api/memory/save',
+                getAllMemories: 'GET /api/memory/all',
+                searchMemories: 'GET /api/memory/search',
+                getMemory: 'GET /api/memory/:id',
+                updateMemory: 'PUT /api/memory/:id',
+                deleteMemory: 'DELETE /api/memory/:id'
+            };
+
+            // Add SSE endpoints if enabled
+            if (this.mcpServer && process.env.TRANSPORT === 'sse') {
+                endpoints.mcpSSE = 'GET /sse';
+                endpoints.mcpMessage = 'POST /message';
+            }
+
             res.json({
                 success: true,
                 data: {
                     name: 'Mem0 MCP Server - HTTP API',
                     version: '0.1.0',
                     description: 'HTTP API for long term memory storage and retrieval with Mem0',
-                    endpoints: {
-                        health: 'GET /api/health',
-                        info: 'GET /api/info',
-                        saveMemory: 'POST /api/memory/save',
-                        getAllMemories: 'GET /api/memory/all',
-                        searchMemories: 'GET /api/memory/search',
-                        getMemory: 'GET /api/memory/:id',
-                        updateMemory: 'PUT /api/memory/:id',
-                        deleteMemory: 'DELETE /api/memory/:id'
-                    },
+                    transport: process.env.TRANSPORT || 'stdio',
+                    endpoints,
                     authentication: 'Bearer token required for memory operations',
                     documentation: 'See docs/HTTP_API.md for detailed API documentation'
                 },
@@ -161,6 +191,107 @@ export class ExpressServer {
                 requestId: req.requestId
             });
         });
+    }
+
+    /**
+     * Setup SSE routes for MCP transport
+     */
+    setupSSERoutes() {
+        // SSE endpoint for MCP clients
+        this.app.get('/sse', async (req, res) => {
+            try {
+                logger.info('New SSE MCP connection established');
+
+                // Create SSE transport
+                const transport = new SSEServerTransport('/message', res);
+
+                // Store transport for message routing
+                this.sseTransports.set(transport.sessionId, transport);
+
+                // Setup transport cleanup
+                transport.onclose = () => {
+                    logger.info('SSE MCP connection closed', { sessionId: transport.sessionId });
+                    this.sseTransports.delete(transport.sessionId);
+                };
+
+                // Connect MCP server to this transport
+                await this.mcpServer.server.connect(transport);
+
+                logger.info('MCP server connected to SSE transport', { sessionId: transport.sessionId });
+            } catch (error) {
+                logger.error('Failed to establish SSE MCP connection:', error);
+                res.status(500).json({
+                    success: false,
+                    error: {
+                        code: 'SSE_CONNECTION_FAILED',
+                        message: 'Failed to establish SSE connection',
+                        details: error.message
+                    }
+                });
+            }
+        });
+
+        // Message endpoint for MCP clients
+        this.app.post('/message', async (req, res) => {
+            try {
+                const sessionId = req.query.sessionId;
+
+                logger.debug('Message endpoint called', {
+                    sessionId,
+                    query: req.query,
+                    headers: req.headers,
+                    activeSessions: Array.from(this.sseTransports.keys())
+                });
+
+                if (!sessionId) {
+                    logger.warn('Missing session ID in message request', {
+                        query: req.query,
+                        activeSessions: Array.from(this.sseTransports.keys())
+                    });
+                    return res.status(400).json({
+                        success: false,
+                        error: {
+                            code: 'MISSING_SESSION_ID',
+                            message: 'Session ID is required',
+                            activeSessions: Array.from(this.sseTransports.keys())
+                        }
+                    });
+                }
+
+                const transport = this.sseTransports.get(sessionId);
+
+                if (!transport) {
+                    logger.warn('Session not found', {
+                        sessionId,
+                        activeSessions: Array.from(this.sseTransports.keys())
+                    });
+                    return res.status(404).json({
+                        success: false,
+                        error: {
+                            code: 'SESSION_NOT_FOUND',
+                            message: 'SSE session not found',
+                            requestedSession: sessionId,
+                            activeSessions: Array.from(this.sseTransports.keys())
+                        }
+                    });
+                }
+
+                await transport.handlePostMessage(req, res);
+                logger.debug('MCP message processed', { sessionId });
+            } catch (error) {
+                logger.error('Failed to process MCP message:', error);
+                res.status(500).json({
+                    success: false,
+                    error: {
+                        code: 'MESSAGE_PROCESSING_FAILED',
+                        message: 'Failed to process message',
+                        details: error.message
+                    }
+                });
+            }
+        });
+
+        logger.info('SSE MCP transport routes configured');
     }
 
     /**
@@ -243,13 +374,14 @@ export class ExpressServer {
 /**
  * Start Express server with the provided memory service
  * @param {MemoryService} memoryService - The memory service instance
+ * @param {Mem0MCPServer} mcpServer - The MCP server instance (optional, for SSE transport)
  * @returns {Promise<ExpressServer>}
  */
-export async function startExpressServer(memoryService) {
+export async function startExpressServer(memoryService, mcpServer = null) {
     const port = parseInt(process.env.HTTP_SERVER_PORT) || 3000;
     const host = process.env.HTTP_SERVER_HOST || '0.0.0.0';
 
-    const expressServer = new ExpressServer(memoryService);
+    const expressServer = new ExpressServer(memoryService, mcpServer);
     await expressServer.start(port, host);
 
     return expressServer;

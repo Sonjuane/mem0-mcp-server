@@ -4,7 +4,8 @@ A Node.js implementation of the Mem0 MCP (Model Context Protocol) server with lo
 
 ## Features
 
-- **Dual Transport Support**: Both stdio (MCP) and HTTP API transports
+- **Triple Transport Support**: stdio (MCP), SSE (MCP), and HTTP API transports
+- **SSE Transport**: Server-Sent Events for MCP communication over HTTP
 - **HTTP API**: RESTful API for easy integration with VS Code and other tools
 - **Local File Storage**: Stores memories in a `.Mem0-Files` directory in your project root
 - **MCP Tools**: Provides `save_memory`, `get_all_memories`, and `search_memories` tools
@@ -32,6 +33,9 @@ A Node.js implementation of the Mem0 MCP (Model Context Protocol) server with lo
    # Run with stdio transport (MCP)
    npm start
    
+   # Run with SSE transport (MCP over HTTP)
+   TRANSPORT=sse HTTP_SERVER_ENABLED=true npm start
+   
    # Run with HTTP server only
    npm run start:http
    
@@ -44,7 +48,7 @@ A Node.js implementation of the Mem0 MCP (Model Context Protocol) server with lo
 The server is configured via environment variables. Copy `.env.example` to `.env` and configure:
 
 ### Basic Configuration
-- `TRANSPORT`: Transport protocol (`stdio` or `sse`) - currently only `stdio` is supported
+- `TRANSPORT`: Transport protocol (`stdio` or `sse`) - both are fully supported
 - `STORAGE_PROVIDER`: Storage backend (`local` or `postgresql`) - currently only `local` is implemented
 - `LOCAL_STORAGE_DIR`: Directory for local storage (default: `.Mem0-Files`)
 
@@ -78,8 +82,9 @@ To use this MCP server with VS Code and the Roo Code extension:
 5. **Find "MCP Servers" configuration** in the Roo Code settings
 6. **Copy and paste the generated configuration** from step 2
 
-#### Configuration Example:
+#### Configuration Examples:
 
+**Option 1: Stdio Transport (Direct Process Communication)**
 Add this configuration to your Roo Code MCP servers settings:
 
 ```json
@@ -93,6 +98,28 @@ Add this configuration to your Roo Code MCP servers settings:
       "LOCAL_STORAGE_DIR": ".Mem0-Files",
       "DEFAULT_USER_ID": "vscode-user",
       "DEBUG": "false"
+    }
+  }
+}
+```
+
+**Option 2: SSE Transport (HTTP-based Communication)**
+First, start the server with SSE transport:
+```bash
+TRANSPORT=sse HTTP_SERVER_ENABLED=true npm start
+```
+
+Then add this configuration to your Roo Code MCP servers settings:
+```json
+{
+  "mcpServers": {
+    "mem0-sse": {
+      "transport": "sse",
+      "url": "http://localhost:8484/sse",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_TOKEN_HERE"
+      },
+      "description": "Mem0 MCP Server via SSE transport"
     }
   }
 }
