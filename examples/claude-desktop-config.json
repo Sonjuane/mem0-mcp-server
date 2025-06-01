@@ -1,0 +1,21 @@
+{
+    "mcpServers": {
+        "mem0-nodejs": {
+            "command": "node",
+            "args": [
+                "/path/to/mem0_mcp_server_nodejs/src/main.js"
+            ],
+            "env": {
+                "TRANSPORT": "stdio",
+                "STORAGE_PROVIDER": "local",
+                "LOCAL_STORAGE_DIR": ".Mem0-Files",
+                "LLM_PROVIDER": "openai",
+                "LLM_API_KEY": "your-openai-api-key-here",
+                "LLM_CHOICE": "gpt-4o-mini",
+                "EMBEDDING_MODEL_CHOICE": "text-embedding-3-small",
+                "DEFAULT_USER_ID": "user",
+                "DEBUG": "false"
+            }
+        }
+    }
+}

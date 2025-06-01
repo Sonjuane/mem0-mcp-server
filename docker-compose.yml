@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  mem0-mcp:
+    build: .
+    container_name: mem0-mcp-nodejs
+    environment:
+      - TRANSPORT=stdio
+      - STORAGE_PROVIDER=local
+      - LOCAL_STORAGE_DIR=.Mem0-Files
+      - LLM_PROVIDER=openai
+      - LLM_CHOICE=gpt-4o-mini
+      - EMBEDDING_MODEL_CHOICE=text-embedding-3-small
+      - DEFAULT_USER_ID=user
+      - DEBUG=false
+    volumes:
+      # Mount memory storage to persist data
+      - mem0_data:/app/.Mem0-Files
+    restart: unless-stopped
+    # For stdio transport, the container will be managed by MCP client
+    # For SSE transport (when implemented), uncomment the ports section:
+    # ports:
+    #   - "8050:8050"
+
+volumes:
+  mem0_data:
+    driver: local

@@ -1,0 +1,51 @@
+{
+    "name": "mem0-mcp-server-nodejs",
+    "version": "0.1.0",
+    "description": "MCP server for long term memory storage and retrieval with Mem0 - Node.js implementation with local file storage",
+    "type": "module",
+    "main": "src/main.js",
+    "scripts": {
+        "start": "node src/main.js",
+        "start:stdio": "TRANSPORT=stdio node src/main.js",
+        "start:http": "HTTP_SERVER_ENABLED=true node src/main.js",
+        "start:both": "TRANSPORT=stdio HTTP_SERVER_ENABLED=true node src/main.js",
+        "dev": "node --watch src/main.js",
+        "dev:http": "HTTP_SERVER_ENABLED=true node --watch src/main.js",
+        "test": "node --test test/**/*.test.js",
+        "demo": "node examples/demo.js",
+        "config": "node scripts/get-config-path.js",
+        "lint": "eslint src/**/*.js",
+        "docker:build": "docker build -t mem0-mcp-nodejs .",
+        "docker:run": "docker run --env-file .env -p 8050:8050 mem0-mcp-nodejs"
+    },
+    "keywords": [
+        "mcp",
+        "mem0",
+        "memory",
+        "ai",
+        "agent",
+        "nodejs",
+        "esm"
+    ],
+    "author": "",
+    "license": "MIT",
+    "dependencies": {
+        "@modelcontextprotocol/sdk": "^0.5.0",
+        "dotenv": "^16.4.5",
+        "node-fetch": "^3.3.2",
+        "uuid": "^10.0.0",
+        "express": "^4.18.2",
+        "cors": "^2.8.5",
+        "helmet": "^7.1.0",
+        "express-rate-limit": "^7.1.5",
+        "jsonwebtoken": "^9.0.2",
+        "bcryptjs": "^2.4.3"
+    },
+    "devDependencies": {
+        "eslint": "^9.0.0",
+        "supertest": "^6.3.3"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    }
+}

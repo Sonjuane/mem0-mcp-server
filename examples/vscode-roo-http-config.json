@@ -1,0 +1,12 @@
+{
+    "mcpServers": {
+        "mem0-http": {
+            "transport": "sse",
+            "url": "http://localhost:3000",
+            "headers": {
+                "Authorization": "Bearer your-secure-api-token-here"
+            },
+            "description": "Mem0 MCP Server via HTTP - Save memories to current project directory"
+        }
+    }
+}
