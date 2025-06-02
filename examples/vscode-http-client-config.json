@@ -1,0 +1,16 @@
+{
+    "mem0-nodejs-http": {
+        "command": "curl",
+        "args": [
+            "-s",
+            "-X",
+            "GET",
+            "http://localhost:8484/api/health"
+        ],
+        "env": {
+            "MEM0_SERVER_URL": "http://localhost:8484",
+            "MEM0_API_TOKEN": "550EA5B7-4C7B-4B17-9BF7-5A6B6D232FA2",
+            "MEM0_USER_ID": "vscode-user"
+        }
+    }
+}

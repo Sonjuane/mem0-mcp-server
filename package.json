@@ -6,17 +6,15 @@
     "main": "src/main.js",
     "scripts": {
         "start": "node src/main.js",
-        "start:stdio": "TRANSPORT=stdio node src/main.js",
-        "start:http": "HTTP_SERVER_ENABLED=true node src/main.js",
-        "start:both": "TRANSPORT=stdio HTTP_SERVER_ENABLED=true node src/main.js",
+        "start:workspace": "node scripts/start-with-workspace.js",
         "dev": "node --watch src/main.js",
-        "dev:http": "HTTP_SERVER_ENABLED=true node --watch src/main.js",
         "test": "node --test test/**/*.test.js",
+        "test:workspace": "node scripts/test-workspace-detection.js",
         "demo": "node examples/demo.js",
         "config": "node scripts/get-config-path.js",
         "lint": "eslint src/**/*.js",
         "docker:build": "docker build -t mem0-mcp-nodejs .",
-        "docker:run": "docker run --env-file .env -p 8050:8050 mem0-mcp-nodejs"
+        "docker:run": "docker run --env-file .env -p 8484:8484 mem0-mcp-nodejs"
     },
     "keywords": [
         "mcp",

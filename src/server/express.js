@@ -146,7 +146,7 @@ export class ExpressServer {
         const memoryController = new MemoryController(this.memoryService);
 
         // SSE MCP transport endpoints (if MCP server is provided)
-        if (this.mcpServer && process.env.TRANSPORT === 'sse') {
+        if (this.mcpServer) {
             this.setupSSERoutes();
         }
 
@@ -169,8 +169,8 @@ export class ExpressServer {
                 deleteMemory: 'DELETE /api/memory/:id'
             };
 
-            // Add SSE endpoints if enabled
-            if (this.mcpServer && process.env.TRANSPORT === 'sse') {
+            // Add SSE endpoints if MCP server is available
+            if (this.mcpServer) {
                 endpoints.mcpSSE = 'GET /sse';
                 endpoints.mcpMessage = 'POST /message';
             }
@@ -181,7 +181,7 @@ export class ExpressServer {
                     name: 'Mem0 MCP Server - HTTP API',
                     version: '0.1.0',
                     description: 'HTTP API for long term memory storage and retrieval with Mem0',
-                    transport: process.env.TRANSPORT || 'stdio',
+                    transport: process.env.TRANSPORT || 'sse',
                     endpoints,
                     authentication: 'Bearer token required for memory operations',
                     documentation: 'See docs/HTTP_API.md for detailed API documentation'
@@ -202,11 +202,15 @@ export class ExpressServer {
             try {
                 logger.info('New SSE MCP connection established');
 
-                // Create SSE transport
+                logger.info('Creating SSE transport...');
+
+                // Create SSE transport - let it handle the headers
                 const transport = new SSEServerTransport('/message', res);
+                logger.info('SSE transport created', { sessionId: transport.sessionId });
 
                 // Store transport for message routing
                 this.sseTransports.set(transport.sessionId, transport);
+                logger.info('Transport stored in map');
 
                 // Setup transport cleanup
                 transport.onclose = () => {
@@ -214,20 +218,23 @@ export class ExpressServer {
                     this.sseTransports.delete(transport.sessionId);
                 };
 
+                logger.info('About to connect MCP server to transport...');
                 // Connect MCP server to this transport
                 await this.mcpServer.server.connect(transport);
 
                 logger.info('MCP server connected to SSE transport', { sessionId: transport.sessionId });
             } catch (error) {
                 logger.error('Failed to establish SSE MCP connection:', error);
-                res.status(500).json({
-                    success: false,
-                    error: {
-                        code: 'SSE_CONNECTION_FAILED',
-                        message: 'Failed to establish SSE connection',
-                        details: error.message
-                    }
-                });
+                if (!res.headersSent) {
+                    res.status(500).json({
+                        success: false,
+                        error: {
+                            code: 'SSE_CONNECTION_FAILED',
+                            message: 'Failed to establish SSE connection',
+                            details: error.message
+                        }
+                    });
+                }
             }
         });
 

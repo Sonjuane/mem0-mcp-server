@@ -1,5 +1,4 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import dotenv from 'dotenv';
@@ -8,23 +7,13 @@ import { createMem0Client } from './mem0/client.js';
 import { logger } from './utils/logger.js';
 import { MemoryService } from './services/MemoryService.js';
 import { startExpressServer } from './server/express.js';
+import { loadMcpConfig } from './config/reader.js';
 
 // Load environment variables
 dotenv.config();
 
-// Configuration
-const config = {
-    transport: process.env.TRANSPORT || 'stdio',
-    host: process.env.HOST || '0.0.0.0',
-    port: parseInt(process.env.PORT) || 8050,
-    storageProvider: process.env.STORAGE_PROVIDER || 'local',
-    defaultUserId: process.env.DEFAULT_USER_ID || 'user',
-    debug: process.env.DEBUG === 'true',
-    // HTTP server configuration
-    httpServerEnabled: process.env.HTTP_SERVER_ENABLED === 'true',
-    httpServerPort: parseInt(process.env.HTTP_SERVER_PORT) || 3000,
-    httpServerHost: process.env.HTTP_SERVER_HOST || '0.0.0.0'
-};
+// Configuration will be loaded asynchronously
+let config = null;
 
 class Mem0MCPServer {
     constructor() {
@@ -50,8 +39,19 @@ class Mem0MCPServer {
 
     async initialize() {
         try {
-            // Initialize storage provider
-            this.storageProvider = await createStorageProvider(config.storageProvider);
+            // Load configuration from mcp.json and environment variables
+            if (!config) {
+                config = await loadMcpConfig();
+                logger.info('Configuration loaded successfully');
+            }
+
+            // Initialize storage provider with custom options
+            const storageOptions = {};
+            if (config.storageDirectory) {
+                storageOptions.storageDirectory = config.storageDirectory;
+            }
+
+            this.storageProvider = await createStorageProvider(config.storageProvider, storageOptions);
             logger.info(`Initialized ${config.storageProvider} storage provider`);
 
             // Initialize Mem0 client
@@ -233,33 +233,14 @@ class Mem0MCPServer {
     async run() {
         await this.initialize();
 
-        // Start stdio transport if configured
-        if (config.transport === 'stdio') {
-            const transport = new StdioServerTransport();
-            await this.server.connect(transport);
-            logger.info('Mem0 MCP Server running with stdio transport');
-        } else if (config.transport === 'sse') {
-            // SSE transport requires HTTP server to be enabled
-            if (!config.httpServerEnabled) {
-                throw new Error('SSE transport requires HTTP_SERVER_ENABLED=true');
-            }
-            logger.info('SSE transport will be handled by Express server');
-        }
-
-        // Start HTTP server if enabled
-        if (config.httpServerEnabled) {
-            try {
-                this.expressServer = await startExpressServer(this.memoryService, this);
-                logger.info('HTTP server started successfully');
-            } catch (error) {
-                logger.error('Failed to start HTTP server:', error);
-                throw error;
-            }
-        }
-
-        // Ensure at least one transport is running
-        if (config.transport !== 'stdio' && !config.httpServerEnabled) {
-            throw new Error('No transport configured. Please set TRANSPORT=stdio or HTTP_SERVER_ENABLED=true');
+        // Start HTTP server (always enabled in HTTP-only mode)
+        try {
+            this.expressServer = await startExpressServer(this.memoryService, this);
+            logger.info('Mem0 MCP Server running in HTTP-only mode');
+            logger.info(`Server available at: http://${config.httpServerHost}:${config.httpServerPort}`);
+        } catch (error) {
+            logger.error('Failed to start HTTP server:', error);
+            throw error;
         }
     }
 
@@ -286,6 +267,10 @@ let serverInstance = null;
 // Main execution
 async function main() {
     try {
+        // Load configuration first
+        config = await loadMcpConfig();
+        logger.info('Configuration loaded successfully');
+
         serverInstance = new Mem0MCPServer();
         await serverInstance.run();
     } catch (error) {

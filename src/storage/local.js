@@ -1,4 +1,5 @@
 import { promises as fs } from 'fs';
+import { readdirSync } from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../utils/logger.js';
@@ -83,10 +84,193 @@ export class StorageProvider {
  * Stores memories as JSON files in a local directory structure
  */
 export class LocalStorageProvider extends StorageProvider {
-    constructor() {
+    constructor(customStorageDirectory = null) {
         super();
-        this.baseDir = process.env.LOCAL_STORAGE_DIR || '.Mem0-Files';
+
+        if (customStorageDirectory) {
+            // When a custom storage directory is provided, add .Mem0-files subdirectory
+            this.baseDir = path.join(customStorageDirectory, '.Mem0-files');
+            logger.info(`Using custom storage directory: ${customStorageDirectory}`);
+            logger.info(`Memory files will be stored in: ${this.baseDir}`);
+        } else {
+            this.baseDir = this._determineStorageDirectory();
+        }
+
         this.initialized = false;
+    }
+
+    /**
+     * Detect the client's working directory from various sources
+     */
+    _detectClientWorkingDirectory() {
+        // Try multiple methods to detect client working directory
+
+        // Method 1: Check for explicit PROJECT_DIR environment variable (highest priority)
+        if (process.env.PROJECT_DIR) {
+            logger.info(`Using explicit PROJECT_DIR: ${process.env.PROJECT_DIR}`);
+            return process.env.PROJECT_DIR;
+        }
+
+        // Method 2: Check for VSCode workspace environment variables
+        if (process.env.VSCODE_WORKSPACE_FOLDER) {
+            logger.info(`Using VSCODE_WORKSPACE_FOLDER: ${process.env.VSCODE_WORKSPACE_FOLDER}`);
+            return process.env.VSCODE_WORKSPACE_FOLDER;
+        }
+
+        if (process.env.VSCODE_CWD) {
+            logger.info(`Using VSCODE_CWD: ${process.env.VSCODE_CWD}`);
+            return process.env.VSCODE_CWD;
+        }
+
+        // Method 3: Check for PWD environment variable (common in Unix shells)
+        if (process.env.PWD && process.env.PWD !== process.cwd()) {
+            logger.info(`Using PWD: ${process.env.PWD}`);
+            return process.env.PWD;
+        }
+
+        // Method 4: Check for INIT_CWD (npm/yarn sets this to the directory where npm was invoked)
+        if (process.env.INIT_CWD && process.env.INIT_CWD !== process.cwd()) {
+            logger.info(`Using INIT_CWD: ${process.env.INIT_CWD}`);
+            return process.env.INIT_CWD;
+        }
+
+        // Method 5: Look for VSCode workspace indicators in parent directories
+        // This helps when MCP server is in a subdirectory of the workspace
+        let currentDir = process.cwd();
+        const maxLevels = 5; // Limit search to avoid going too far up
+        let workspaceCandidates = [];
+
+        for (let i = 0; i < maxLevels; i++) {
+            const parentDir = path.dirname(currentDir);
+            if (parentDir === currentDir) break; // Reached root
+
+            // Stop if we reach the user's home directory
+            if (parentDir === process.env.HOME || parentDir.endsWith('/Users/' + process.env.USER)) {
+                break;
+            }
+
+            try {
+                const files = readdirSync(parentDir);
+
+                // Check for VSCode workspace directory
+                if (files.includes('.vscode')) {
+                    try {
+                        const vscodeFiles = readdirSync(path.join(parentDir, '.vscode'));
+                        // If .vscode directory has actual VSCode files, this is a workspace candidate
+                        if (vscodeFiles.length > 0) {
+                            workspaceCandidates.push({
+                                path: parentDir,
+                                level: i,
+                                hasVscode: true,
+                                vscodeFileCount: vscodeFiles.length,
+                                hasGit: files.includes('.git'),
+                                hasPackageJson: files.includes('package.json'),
+                                isProjectDir: files.some(f => ['package.json', '.git', 'pyproject.toml', 'Cargo.toml'].includes(f))
+                            });
+                        }
+                    } catch {
+                        // .vscode directory exists but can't read it, still a candidate
+                        workspaceCandidates.push({
+                            path: parentDir,
+                            level: i,
+                            hasVscode: true,
+                            vscodeFileCount: 0,
+                            hasGit: files.includes('.git'),
+                            hasPackageJson: files.includes('package.json'),
+                            isProjectDir: files.some(f => ['package.json', '.git', 'pyproject.toml', 'Cargo.toml'].includes(f))
+                        });
+                    }
+                }
+
+                // Check for other strong workspace indicators (only if no .vscode)
+                const strongIndicators = ['.git', 'package.json', 'pyproject.toml', 'Cargo.toml'];
+                const hasStrongIndicator = strongIndicators.some(indicator => files.includes(indicator));
+
+                if (hasStrongIndicator && !files.includes('.vscode')) {
+                    workspaceCandidates.push({
+                        path: parentDir,
+                        level: i,
+                        hasVscode: false,
+                        vscodeFileCount: 0,
+                        hasGit: files.includes('.git'),
+                        hasPackageJson: files.includes('package.json'),
+                        isProjectDir: true
+                    });
+                }
+
+            } catch (error) {
+                // Ignore errors reading directory
+            }
+
+            currentDir = parentDir;
+        }
+
+        // Select the best workspace candidate
+        if (workspaceCandidates.length > 0) {
+            // Sort candidates by priority:
+            // 1. Prefer directories that are actual projects (have project files)
+            // 2. Among project directories, prefer ones with .vscode
+            // 3. Prefer lower-level directories (closer to the MCP server)
+            workspaceCandidates.sort((a, b) => {
+                // First priority: actual project directories
+                if (a.isProjectDir && !b.isProjectDir) return -1;
+                if (!a.isProjectDir && b.isProjectDir) return 1;
+
+                // Among project directories, prefer ones with .vscode
+                if (a.isProjectDir && b.isProjectDir) {
+                    if (a.hasVscode && !b.hasVscode) return -1;
+                    if (!a.hasVscode && b.hasVscode) return 1;
+
+                    // If both have .vscode, prefer lower level (closer to MCP server)
+                    if (a.hasVscode && b.hasVscode) {
+                        return a.level - b.level;
+                    }
+                }
+
+                // Prefer directories with .git
+                if (a.hasGit && !b.hasGit) return -1;
+                if (!a.hasGit && b.hasGit) return 1;
+
+                // Finally, prefer lower level directories
+                return a.level - b.level;
+            });
+
+            return workspaceCandidates[0].path;
+        }
+
+        return null;
+    }
+
+    /**
+     * Determine the storage directory based on client context
+     */
+    _determineStorageDirectory() {
+        const defaultDir = process.env.LOCAL_STORAGE_DIR || '.Mem0-Files';
+
+        // If LOCAL_STORAGE_DIR is an absolute path, use it as-is
+        if (path.isAbsolute(defaultDir)) {
+            return defaultDir;
+        }
+
+        // If LOCAL_STORAGE_DIR is explicitly set (not default), respect it for testing/custom configs
+        if (process.env.LOCAL_STORAGE_DIR && process.env.LOCAL_STORAGE_DIR !== '.Mem0-Files') {
+            return defaultDir;
+        }
+
+        // Only try client detection for the default directory name
+        const clientWorkingDir = this._detectClientWorkingDirectory();
+
+        if (clientWorkingDir) {
+            // Use the detected client directory as the base for storage
+            const storageDir = path.join(clientWorkingDir, defaultDir);
+            logger.info(`Using client working directory for storage: ${clientWorkingDir}`);
+            logger.info(`Memory files will be stored in: ${storageDir}`);
+            return storageDir;
+        }
+
+        // Fallback to current working directory (original behavior)
+        logger.warn('Could not detect client working directory, using server directory');
+        return defaultDir;
     }
 
     async initialize() {

@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "mem0-sse": {
+      "transport": "sse",
+      "url": "http://localhost:8484/sse",
+      "headers": {
+        "Authorization": "Bearer 550EA5B7-4C7B-4C17-9BF7-5A6B6D232FA2"
+      },
+      "description": "Mem0 MCP Server via SSE transport",
+      "storage_provider": "local",
+      "storage_directory": "/Users/sonjuane/Dropbox/Projects/WEB-COMPONENTS/markdown-component/version-4",
+      "alwaysAllow": [
+        "get_all_memories",
+        "save_memory"
+      ]
+    }
+  }
+}

@@ -1,15 +1,17 @@
-# Mem0 Local MCP Server - Node.js
+# Mem0 MCP Server - Node.js (HTTP-Only)
 
-A Node.js implementation of the Mem0 MCP (Model Context Protocol) server with local file storage capabilities.
+A Node.js implementation of the Mem0 MCP (Model Context Protocol) server with **HTTP-only operation** for simplified deployment and integration.
+
+This was based on this repo [coleam00/mcp-mem0.git](https://github.com/coleam00/mcp-mem0.git)
 
 ## Features
 
-- **Triple Transport Support**: stdio (MCP), SSE (MCP), and HTTP API transports
-- **SSE Transport**: Server-Sent Events for MCP communication over HTTP
-- **HTTP API**: RESTful API for easy integration with VS Code and other tools
-- **Local File Storage**: Stores memories in a `.Mem0-Files` directory in your project root
+- **HTTP-Only Operation**: Simplified server that runs exclusively via HTTP API
+- **Workspace Integration**: Automatically stores memories in your active project directory
+- **RESTful API**: Easy integration with web applications, VSCode extensions, and MCP clients
+- **Local File Storage**: Stores memories in a `.Mem0-Files` directory in your workspace root
 - **MCP Tools**: Provides `save_memory`, `get_all_memories`, and `search_memories` tools
-- **Authentication**: Token-based authentication for HTTP API
+- **Authentication**: Token-based authentication for secure API access
 - **Rate Limiting**: Built-in protection against API abuse
 - **Configurable Storage**: Plugin architecture supports multiple storage backends
 - **ESM Modules**: Modern Node.js implementation using ES modules
@@ -30,17 +32,35 @@ A Node.js implementation of the Mem0 MCP (Model Context Protocol) server with lo
 
 3. **Run the server**:
    ```bash
-   # Run with stdio transport (MCP)
+   # Start the HTTP server (default port 8484)
    npm start
    
-   # Run with SSE transport (MCP over HTTP)
-   TRANSPORT=sse HTTP_SERVER_ENABLED=true npm start
+   # Start with specific workspace (recommended)
+   npm run start:workspace /path/to/your/project
    
-   # Run with HTTP server only
-   npm run start:http
+   # Start in development mode with auto-restart
+   npm run dev
+   ```
+
+4. **Verify it's working**:
+   ```bash
+   # Check server status
+   curl http://localhost:8484/
    
-   # Run with both stdio and HTTP (dual transport)
-   npm run start:both
+   # Or open in browser: http://localhost:8484
+   ```
+
+5. **Use the HTTP API**:
+   ```bash
+   # Save a memory
+   curl -X POST http://localhost:8484/api/memory/save \
+     -H "Content-Type: application/json" \
+     -H "Authorization: Bearer 550EA5B7-4C7B-4B17-9BF7-5A6B6D232FA2" \
+     -d '{"text": "Your memory here", "userId": "vscode-user"}'
+   
+   # Search memories
+   curl "http://localhost:8484/api/memory/search?query=memory&userId=vscode-user" \
+     -H "Authorization: Bearer 550EA5B7-4C7B-4B17-9BF7-5A6B6D232FA2"
    ```
 
 ## Configuration
@@ -48,11 +68,13 @@ A Node.js implementation of the Mem0 MCP (Model Context Protocol) server with lo
 The server is configured via environment variables. Copy `.env.example` to `.env` and configure:
 
 ### Basic Configuration
-- `TRANSPORT`: Transport protocol (`stdio` or `sse`) - both are fully supported
+- `HOST`: Host to bind to (default: `0.0.0.0`)
+- `PORT`: Port to listen on (default: `8484`)
 - `STORAGE_PROVIDER`: Storage backend (`local` or `postgresql`) - currently only `local` is implemented
 - `LOCAL_STORAGE_DIR`: Directory for local storage (default: `.Mem0-Files`)
+- `PROJECT_DIR`: Workspace directory where memories will be stored (auto-detected or set explicitly)
 
-### HTTP Server Configuration
+### HTTP Server Configuration (Always Enabled)
 - `HTTP_SERVER_ENABLED`: Enable HTTP API server (`true` or `false`, default: `false`)
 - `HTTP_SERVER_PORT`: HTTP server port (default: `3000`)
 - `HTTP_SERVER_HOST`: HTTP server host (default: `0.0.0.0`)
