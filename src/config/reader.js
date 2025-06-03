@@ -235,6 +235,9 @@ export class ConfigReader {
             return null;
         }
 
+        // Log all available MCP servers for debugging
+        logger.info('Available MCP servers in configuration:', Object.keys(clientConfig.mcpServers));
+
         // Find mem0-related server configurations
         const mem0Servers = Object.entries(clientConfig.mcpServers)
             .filter(([name, config]) =>
@@ -248,12 +251,29 @@ export class ConfigReader {
             return null;
         }
 
+        // Log all matched mem0 servers for debugging
+        logger.info('Matched mem0 servers:', mem0Servers.map(([name]) => name));
+
         // Use the first mem0 server configuration found
         const [serverName, serverConfig] = mem0Servers[0];
         logger.info(`Using configuration from server: ${serverName}`);
 
+        // Apply environment variable overrides from the 'env' key
+        if (serverConfig.env) {
+            logger.info('Applying environment variable overrides from MCP configuration');
+            for (const [key, value] of Object.entries(serverConfig.env)) {
+                const oldValue = process.env[key];
+                process.env[key] = value;
+                logger.debug(`Environment override: ${key}=${value}${oldValue ? ` (was: ${oldValue})` : ''}`);
+            }
+        }
+
         // Extract storage configuration
         const extractedConfig = {};
+
+        // Store the server name so the MCP server can use it
+        extractedConfig.mcpServerName = serverName;
+        logger.info(`Using MCP server name from config: ${serverName}`);
 
         if (serverConfig.storage_provider) {
             extractedConfig.storageProvider = serverConfig.storage_provider;
@@ -272,6 +292,12 @@ export class ConfigReader {
 
         if (serverConfig.max_search_results) {
             extractedConfig.maxSearchResults = serverConfig.max_search_results;
+        }
+
+        // Extract HTTP configuration
+        if (serverConfig.env?.HTTP_SERVER_ENABLED) {
+            logger.info('HTTP server enabled in configuration');
+            extractedConfig.httpServerEnabled = serverConfig.env.HTTP_SERVER_ENABLED === 'true';
         }
 
         return Object.keys(extractedConfig).length > 0 ? extractedConfig : null;
@@ -319,9 +345,10 @@ export async function loadMcpConfig() {
         storageProvider: process.env.STORAGE_PROVIDER || 'local',
         defaultUserId: process.env.DEFAULT_USER_ID || 'user',
         debug: process.env.DEBUG === 'true',
-        httpServerEnabled: true,
+        httpServerEnabled: process.env.HTTP_SERVER_ENABLED === 'true',
         httpServerPort: parseInt(process.env.HTTP_SERVER_PORT) || parseInt(process.env.PORT) || 8484,
-        httpServerHost: process.env.HTTP_SERVER_HOST || process.env.HOST || '0.0.0.0'
+        httpServerHost: process.env.HTTP_SERVER_HOST || process.env.HOST || '0.0.0.0',
+        apiToken: process.env.API_TOKEN
     };
 
     // Merge MCP configuration (takes precedence over environment variables)

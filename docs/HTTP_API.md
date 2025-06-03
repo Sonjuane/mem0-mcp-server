@@ -7,8 +7,10 @@ The Mem0 MCP Server HTTP API provides RESTful endpoints for memory storage and r
 ## Base URL
 
 ```
-http://localhost:3000
+http://localhost:8484
 ```
+
+**Note:** The default port is 8484, but this can be configured via the `HTTP_SERVER_PORT` environment variable or the `env` key in your MCP configuration.
 
 ## Authentication
 
@@ -18,7 +20,9 @@ All memory operations require Bearer token authentication. Include the token in 
 Authorization: Bearer your-api-token-here
 ```
 
-Set the `API_TOKEN` environment variable to configure the expected token.
+Configure the expected token using either:
+- The `API_TOKEN` environment variable
+- The `env` key in your MCP configuration (recommended for VS Code setups)
 
 ## Response Format
 
@@ -51,6 +55,28 @@ All API responses follow a consistent format:
 ```
 
 ## Endpoints
+
+### MCP Transport Endpoints (SSE)
+
+#### GET /sse
+Establish an SSE connection for MCP client communication.
+
+**Headers:**
+- `Accept: text/event-stream`
+- `Cache-Control: no-cache`
+
+**Response:**
+- Content-Type: `text/event-stream`
+- Establishes a persistent SSE connection for MCP protocol communication
+
+#### POST /message
+Send MCP protocol messages via the established SSE connection.
+
+**Query Parameters:**
+- `sessionId` (required): The SSE session ID from the established connection
+
+**Request Body:**
+- Raw MCP protocol message data
 
 ### Public Endpoints (No Authentication Required)
 
@@ -309,7 +335,7 @@ Cross-Origin Resource Sharing (CORS) is configured to allow requests from:
 
 ### Save a Memory
 ```bash
-curl -X POST http://localhost:3000/api/memory/save \
+curl -X POST http://localhost:8484/api/memory/save \
   -H "Authorization: Bearer your-api-token" \
   -H "Content-Type: application/json" \
   -d '{"text": "Remember to update the documentation", "userId": "user123"}'
@@ -318,39 +344,62 @@ curl -X POST http://localhost:3000/api/memory/save \
 ### Search Memories
 ```bash
 curl -H "Authorization: Bearer your-api-token" \
-  "http://localhost:3000/api/memory/search?query=documentation&userId=user123"
+  "http://localhost:8484/api/memory/search?query=documentation&userId=user123"
 ```
 
 ### Get All Memories
 ```bash
 curl -H "Authorization: Bearer your-api-token" \
-  "http://localhost:3000/api/memory/all?userId=user123&limit=10"
+  "http://localhost:8484/api/memory/all?userId=user123&limit=10"
 ```
 
 ## VS Code Integration
 
-To use with VS Code, configure your MCP client with:
+To use with VS Code, configure your MCP client with the `env` key for centralized configuration:
 
 ```json
 {
   "transport": "sse",
-  "url": "http://localhost:3000"
+  "url": "http://localhost:8484/sse",
+  "headers": {
+    "Authorization": "Bearer your-api-token-here"
+  },
+  "env": {
+    "HTTP_SERVER_ENABLED": "true",
+    "HTTP_SERVER_PORT": "8484",
+    "API_TOKEN": "your-api-token-here",
+    "STORAGE_PROVIDER": "local",
+    "DEFAULT_USER_ID": "vscode-user"
+  },
+  "description": "Mem0 MCP Server via HTTP - Save memories to current project directory"
 }
 ```
 
-Note: The server currently supports HTTP transport. SSE transport will be added in a future update.
+The server supports both HTTP REST API and SSE (Server-Sent Events) transport for MCP clients. The `env` key allows you to configure the server directly from your MCP client configuration, eliminating the need for separate environment files.
+
+### SSE Transport Endpoints
+
+When using SSE transport, the server provides these additional endpoints:
+- `GET /sse` - Establish SSE connection for MCP communication
+- `POST /message` - Send MCP messages via SSE transport
 
 ## Environment Variables
+
+These variables can be set either as system environment variables or via the `env` key in your MCP configuration:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `HTTP_SERVER_ENABLED` | Enable HTTP server | `false` |
-| `HTTP_SERVER_PORT` | HTTP server port | `3000` |
+| `HTTP_SERVER_PORT` | HTTP server port | `8484` |
 | `HTTP_SERVER_HOST` | HTTP server host | `0.0.0.0` |
 | `API_TOKEN` | Authentication token | Required |
+| `STORAGE_PROVIDER` | Storage backend | `local` |
+| `DEFAULT_USER_ID` | Default user identifier | `user` |
 | `CORS_ORIGINS` | Allowed CORS origins | `http://localhost:*,https://localhost:*` |
 | `RATE_LIMIT_WINDOW_MS` | Rate limit window | `900000` (15 minutes) |
 | `RATE_LIMIT_MAX_REQUESTS` | Max requests per window | `100` |
+
+**Note:** When using the `env` key in MCP configuration, these values will override any system environment variables, providing centralized configuration management.
 
 ## Security Considerations
 

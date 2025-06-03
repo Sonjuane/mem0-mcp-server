@@ -8,11 +8,12 @@
             "cwd": "/path/to/mem0_mcp_server_nodejs",
             "env": {
                 "HTTP_SERVER_ENABLED": "true",
-                "HTTP_SERVER_PORT": "3000",
+                "HTTP_SERVER_PORT": "8484",
                 "API_TOKEN": "your-secure-api-token-here",
                 "STORAGE_PROVIDER": "local",
                 "DEFAULT_USER_ID": "vscode-user"
-            }
+            },
+            "description": "Mem0 MCP Server with HTTP API - Long-term memory storage and retrieval"
         }
     }
 }

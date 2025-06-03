@@ -83,7 +83,7 @@ export class ExpressServer {
             },
             credentials: true,
             methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-            allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+            allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Workspace-Path']
         }));
 
         // Rate limiting
@@ -201,6 +201,11 @@ export class ExpressServer {
         this.app.get('/sse', async (req, res) => {
             try {
                 logger.info('New SSE MCP connection established');
+                logger.info('Connection headers:', req.headers);
+                logger.info('MCP Server info:', {
+                    name: this.mcpServer.server.info.name,
+                    version: this.mcpServer.server.info.version
+                });
 
                 logger.info('Creating SSE transport...');
 
@@ -219,10 +224,22 @@ export class ExpressServer {
                 };
 
                 logger.info('About to connect MCP server to transport...');
+
+                // Make sure server name is set correctly before connecting
+                if (process.env.MCP_SERVER_NAME) {
+                    logger.info(`Ensuring server name is set to: ${process.env.MCP_SERVER_NAME}`);
+                    this.mcpServer.updateServerName(process.env.MCP_SERVER_NAME);
+                } else {
+                    logger.info(`Using current server name: ${this.mcpServer.server.info.name}`);
+                }
+
                 // Connect MCP server to this transport
                 await this.mcpServer.server.connect(transport);
 
-                logger.info('MCP server connected to SSE transport', { sessionId: transport.sessionId });
+                logger.info('MCP server connected to SSE transport', {
+                    sessionId: transport.sessionId,
+                    serverName: this.mcpServer.server.info.name
+                });
             } catch (error) {
                 logger.error('Failed to establish SSE MCP connection:', error);
                 if (!res.headersSent) {

@@ -25,7 +25,11 @@ cd mem0_mcp_server_nodejs
 npm install
 ```
 
-### 1.3 Configure Environment Variables
+### 1.3 Configuration Options
+
+You have two options for configuring the Mem0 MCP Server:
+
+#### Option A: Environment Variables (Traditional)
 
 ```bash
 # Copy the example environment file
@@ -37,7 +41,7 @@ Edit the `.env` file with your preferred settings:
 ```env
 # HTTP Server Configuration
 HTTP_SERVER_ENABLED=true
-HTTP_SERVER_PORT=3000
+HTTP_SERVER_PORT=8484
 HTTP_SERVER_HOST=0.0.0.0
 
 # Security - IMPORTANT: Change this to a secure token
@@ -53,20 +57,33 @@ RATE_LIMIT_WINDOW_MS=900000
 RATE_LIMIT_MAX_REQUESTS=100
 ```
 
+#### Option B: MCP Configuration with `env` Key (Recommended for VS Code)
+
+When using the `env` key in your MCP configuration (as shown in Step 3), you don't need to create a `.env` file. The `env` key will override any environment variables, providing a centralized configuration approach.
+
 **⚠️ Important:** Replace `your-secure-api-token-here` with a strong, unique token (e.g., `mem0-token-abc123xyz789`).
 
 ## Step 2: Start the Mem0 MCP Server
 
 ### 2.1 Start the HTTP Server
 
+**If using Option A (Environment Variables):**
 ```bash
 # Start the server with HTTP enabled
 npm run start:http
 ```
 
+**If using Option B (MCP Configuration with `env` key):**
+```bash
+# Start the server - configuration will be loaded from MCP client
+npm start
+```
+
 You should see output similar to:
 ```
-[INFO] Express server started on http://0.0.0.0:3000
+[INFO] Configuration loaded successfully
+[INFO] Mem0 MCP Server running in HTTP-only mode
+[INFO] Server available at: http://0.0.0.0:8484
 [INFO] Available endpoints:
 [INFO]   GET  /                    - API information
 [INFO]   GET  /api/health          - Health check
@@ -80,8 +97,8 @@ You should see output similar to:
 Open a new terminal and test the server:
 
 ```bash
-# Test the health endpoint
-curl http://localhost:3000/api/health
+# Test the health endpoint (adjust port if using different configuration)
+curl http://localhost:8484/api/health
 ```
 
 You should get a response like:
@@ -117,15 +134,25 @@ Add this configuration to your Roo Code MCP servers settings:
 {
   "mem0-http": {
     "transport": "sse",
-    "url": "http://localhost:3000",
+    "url": "http://localhost:8484/sse",
     "headers": {
       "Authorization": "Bearer your-secure-api-token-here"
-    }
+    },
+    "env": {
+      "HTTP_SERVER_ENABLED": "true",
+      "HTTP_SERVER_PORT": "8484",
+      "API_TOKEN": "your-secure-api-token-here",
+      "STORAGE_PROVIDER": "local",
+      "DEFAULT_USER_ID": "vscode-user"
+    },
+    "description": "Mem0 MCP Server via HTTP - Save memories to current project directory"
   }
 }
 ```
 
-**⚠️ Important:** Replace `your-secure-api-token-here` with the same token you used in the `.env` file.
+**⚠️ Important:** Replace `your-secure-api-token-here` with a strong, unique token.
+
+**Note:** The `env` key allows you to configure the server directly from the MCP client configuration, overriding any environment variables. This eliminates the need for a separate `.env` file when using VS Code.
 
 ### 3.4 Alternative: Direct Configuration
 
@@ -140,10 +167,18 @@ If you prefer to configure it directly in VS Code settings JSON:
   "roo.mcpServers": {
     "mem0-http": {
       "transport": "sse",
-      "url": "http://localhost:3000",
+      "url": "http://localhost:8484/sse",
       "headers": {
         "Authorization": "Bearer your-secure-api-token-here"
-      }
+      },
+      "env": {
+        "HTTP_SERVER_ENABLED": "true",
+        "HTTP_SERVER_PORT": "8484",
+        "API_TOKEN": "your-secure-api-token-here",
+        "STORAGE_PROVIDER": "local",
+        "DEFAULT_USER_ID": "vscode-user"
+      },
+      "description": "Mem0 MCP Server via HTTP - Save memories to current project directory"
     }
   }
 }

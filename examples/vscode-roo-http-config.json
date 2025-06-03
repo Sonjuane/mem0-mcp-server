@@ -2,9 +2,16 @@
     "mcpServers": {
         "mem0-http": {
             "transport": "sse",
-            "url": "http://localhost:3000",
+            "url": "http://localhost:8484/sse",
             "headers": {
                 "Authorization": "Bearer your-secure-api-token-here"
+            },
+            "env": {
+                "HTTP_SERVER_ENABLED": "true",
+                "HTTP_SERVER_PORT": "8484",
+                "API_TOKEN": "your-secure-api-token-here",
+                "STORAGE_PROVIDER": "local",
+                "DEFAULT_USER_ID": "vscode-user"
             },
             "description": "Mem0 MCP Server via HTTP - Save memories to current project directory"
         }

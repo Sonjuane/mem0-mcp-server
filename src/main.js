@@ -15,11 +15,19 @@ dotenv.config();
 // Configuration will be loaded asynchronously
 let config = null;
 
+// Default server name to use if not specified in configuration
+export const DEFAULT_SERVER_NAME = 'mem0-http';
+
 class Mem0MCPServer {
     constructor() {
+        // Server name configuration - important for client connections
+        const serverName = process.env.MCP_SERVER_NAME || DEFAULT_SERVER_NAME;
+
+        logger.info(`Initializing MCP server with name: ${serverName}`);
+
         this.server = new Server(
             {
-                name: 'mem0-mcp-server-nodejs',
+                name: serverName,
                 version: '0.1.0',
                 description: 'MCP server for long term memory storage and retrieval with Mem0 - Node.js implementation'
             },
@@ -30,11 +38,27 @@ class Mem0MCPServer {
             }
         );
 
+        logger.info('MCP server initialized with configuration:', {
+            name: serverName,
+            transport: process.env.TRANSPORT || 'sse'
+        });
+
         this.storageProvider = null;
         this.mem0Client = null;
         this.memoryService = null;
         this.expressServer = null;
         this.setupHandlers();
+    }
+
+    /**
+     * Update the MCP server name
+     * @param {string} newName - New server name
+     */
+    updateServerName(newName) {
+        if (!newName) return;
+
+        logger.info(`Updating server name from "${this.server.info.name}" to "${newName}"`);
+        this.server.info.name = newName;
     }
 
     async initialize() {
@@ -43,6 +67,13 @@ class Mem0MCPServer {
             if (!config) {
                 config = await loadMcpConfig();
                 logger.info('Configuration loaded successfully');
+
+                // Update server name if MCP_SERVER_NAME is in the config
+                // This ensures the server name matches what clients expect
+                if (config.mcpServerName) {
+                    this.updateServerName(config.mcpServerName);
+                    logger.info(`Updated server name to: ${config.mcpServerName}`);
+                }
             }
 
             // Initialize storage provider with custom options
